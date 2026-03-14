@@ -84,7 +84,7 @@
   </div>
 
   <script>
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyIuJIOKNzXW_X9R8Uo3Tetx3MR_1OVMhQyMPcfSz0XL4mWkt9D2GGAnqOtHYSJ4xv2hw/exec";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwR9xRAoeryktjbkGwQRB3Tq-JPLQyduHKZOBv5TJBcGb2rjS3WgBFMhNaLpELF3MUiDw/exec";
 
     let html5QrCode = null;
     let scannerRunning = false;
@@ -121,25 +121,31 @@
 
       status.textContent = "Sending to sheet...";
 
-      await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8"
-        },
-        body: JSON.stringify({
-          code: decodedText,
-          coords: coords,
-          time: scannedTime
-        })
+      const url =
+        APPS_SCRIPT_URL +
+        "?code=" + encodeURIComponent(decodedText) +
+        "&coords=" + encodeURIComponent(coords) +
+        "&time=" + encodeURIComponent(scannedTime);
+
+      const response = await fetch(url, {
+        method: "GET"
       });
 
-      status.textContent = "Sent to sheet";
-      result.textContent =
-        "Code: " + decodedText +
-        "\nCoords: " + (coords || "not captured") +
-        "\nTime: " + scannedTime +
-        "\nStatus: Request sent";
+      const data = await response.json();
+
+      if (data.success) {
+        status.textContent = "Sheet updated";
+        result.textContent =
+          "Code: " + data.code +
+          "\nRow: " + data.row +
+          "\nCoords: " + (coords || "not captured") +
+          "\nTime: " + scannedTime;
+      } else {
+        status.textContent = "Update failed";
+        result.textContent =
+          "Error: " + (data.error || "Unknown error") +
+          "\nCode: " + decodedText;
+      }
     }
 
     async function startScanner() {
@@ -207,5 +213,7 @@
   </script>
 </body>
 </html>
+
+
 
 
