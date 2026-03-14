@@ -99,8 +99,7 @@
 
         navigator.geolocation.getCurrentPosition(
           (position) => {
-            const coords = position.coords.latitude + "," + position.coords.longitude;
-            resolve(coords);
+            resolve(position.coords.latitude + "," + position.coords.longitude);
           },
           () => resolve(""),
           {
@@ -122,10 +121,11 @@
 
       status.textContent = "Sending to sheet...";
 
-      const response = await fetch(APPS_SCRIPT_URL, {
+      await fetch(APPS_SCRIPT_URL, {
         method: "POST",
+        mode: "no-cors",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "text/plain;charset=utf-8"
         },
         body: JSON.stringify({
           code: decodedText,
@@ -134,21 +134,12 @@
         })
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        status.textContent = "Sheet updated";
-        result.textContent =
-          "Code: " + data.code +
-          "\nRow: " + data.row +
-          "\nCoords: " + (coords || "not captured") +
-          "\nTime: " + scannedTime;
-      } else {
-        status.textContent = "Update failed";
-        result.textContent =
-          "Error: " + (data.error || "Unknown error") +
-          "\nCode: " + decodedText;
-      }
+      status.textContent = "Sent to sheet";
+      result.textContent =
+        "Code: " + decodedText +
+        "\nCoords: " + (coords || "not captured") +
+        "\nTime: " + scannedTime +
+        "\nStatus: Request sent";
     }
 
     async function startScanner() {
@@ -216,4 +207,5 @@
   </script>
 </body>
 </html>
+
 
