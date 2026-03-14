@@ -64,7 +64,9 @@
       background: white;
       border-radius: 12px;
       min-height: 24px;
+      white-space: pre-wrap;
       word-break: break-word;
+      text-align: left;
     }
   </style>
 </head>
@@ -82,12 +84,75 @@
   </div>
 
   <script>
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxhmTwemCf1HLhkWg7try6M-Yy9V72qA4cxgaa5OctxCKe0FLAKZF7xXnY9KzRbxm5yhA/exec";
+
     let html5QrCode = null;
     let scannerRunning = false;
+    let alreadySent = false;
+
+    async function getCoords() {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve("");
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const coords = position.coords.latitude + "," + position.coords.longitude;
+            resolve(coords);
+          },
+          () => resolve(""),
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+          }
+        );
+      });
+    }
+
+    async function sendToSheet(decodedText) {
+      const status = document.getElementById("status");
+      const result = document.getElementById("result");
+
+      status.textContent = "Getting location...";
+      const coords = await getCoords();
+      const scannedTime = new Date().toISOString();
+
+      status.textContent = "Sending to sheet...";
+
+      const response = await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          code: decodedText,
+          coords: coords,
+          time: scannedTime
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        status.textContent = "Sheet updated";
+        result.textContent =
+          "Code: " + data.code +
+          "\nRow: " + data.row +
+          "\nCoords: " + (coords || "not captured") +
+          "\nTime: " + scannedTime;
+      } else {
+        status.textContent = "Update failed";
+        result.textContent =
+          "Error: " + (data.error || "Unknown error") +
+          "\nCode: " + decodedText;
+      }
+    }
 
     async function startScanner() {
       const status = document.getElementById("status");
-      const result = document.getElementById("result");
 
       if (scannerRunning) {
         status.textContent = "Scanner already running";
@@ -95,6 +160,7 @@
       }
 
       try {
+        alreadySent = false;
         status.textContent = "Requesting camera...";
         html5QrCode = new Html5Qrcode("reader");
 
@@ -104,9 +170,20 @@
             fps: 10,
             qrbox: 250
           },
-          (decodedText) => {
-            result.textContent = decodedText;
-            status.textContent = "QR scanned";
+          async (decodedText) => {
+            if (alreadySent) return;
+            alreadySent = true;
+
+            status.textContent = "Scanned: " + decodedText;
+
+            try {
+              await sendToSheet(decodedText);
+              await stopScanner();
+            } catch (err) {
+              status.textContent = "Send failed";
+              document.getElementById("result").textContent = String(err);
+              alreadySent = false;
+            }
           },
           () => {}
         );
@@ -139,3 +216,4 @@
   </script>
 </body>
 </html>
+
