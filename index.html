@@ -84,7 +84,7 @@
   </div>
 
   <script>
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyx7N5_K4Is0vH4alcVoGp9m9aNbolwMmjX2d-4MiZSvyCpjLB0w8puzXS_wP_XT9axFw/exec";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxrdRrZCx4Ud3UfoEd6Xg4kbxgUDaHgKqxSnnmiT8ERFa10bp3frjDwBCOmVkAwBvk1NQ/exec";
 
     let html5QrCode = null;
     let scannerRunning = false;
@@ -125,12 +125,10 @@
         APPS_SCRIPT_URL +
         "?code=" + encodeURIComponent(decodedText) +
         "&coords=" + encodeURIComponent(coords) +
-        "&time=" + encodeURIComponent(scannedTime);
+        "&time=" + encodeURIComponent(scannedTime) +
+        "&_ts=" + Date.now();
 
-      const response = await fetch(url, {
-        method: "GET"
-      });
-
+      const response = await fetch(url, { method: "GET" });
       const data = await response.json();
 
       if (data.success) {
@@ -213,7 +211,5 @@
   </script>
 </body>
 </html>
-
-
 
 
