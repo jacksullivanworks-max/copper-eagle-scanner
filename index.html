@@ -15,7 +15,7 @@
     }
 
     .wrap {
-      max-width: 520px;
+      max-width: 980px;
       margin: 0 auto;
       padding: 24px 16px 40px;
     }
@@ -60,6 +60,9 @@
 
     .result-box {
       margin-top: 16px;
+      margin-left: auto;
+      margin-right: auto;
+      max-width: 560px;
       padding: 14px;
       background: white;
       border-radius: 12px;
@@ -67,6 +70,16 @@
       white-space: pre-wrap;
       word-break: break-word;
       text-align: left;
+    }
+
+    #map {
+      width: 100%;
+      max-width: 900px;
+      height: 500px;
+      margin: 28px auto 0;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #d9d9d9;
     }
   </style>
 </head>
@@ -81,27 +94,56 @@
     <button class="btn stop" onclick="stopScanner()">Stop Scanner</button>
 
     <div class="result-box" id="result">No scan yet</div>
+
+    <div id="map"></div>
   </div>
 
   <script>
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxrdRrZCx4Ud3UfoEd6Xg4kbxgUDaHgKqxSnnmiT8ERFa10bp3frjDwBCOmVkAwBvk1NQ/exec";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxcMyqvcfiZUwozW1qT2TV45pWytLSUjn3dcXZ3n5wt4XPEznl5hMtE7AJl9fbRLee28A/exec";
+    const GOOGLE_MAPS_API_KEY = "AIzaSyDERULapFijQK2GctlFE3aNi8C6E8-0xOQ";
 
     let html5QrCode = null;
     let scannerRunning = false;
     let alreadySent = false;
 
+    let map = null;
+    let directionsService = null;
+    let directionsRenderer = null;
+
+    function loadGoogleMaps() {
+      const script = document.createElement("script");
+      script.src = "https://maps.googleapis.com/maps/api/js?key=" + GOOGLE_MAPS_API_KEY + "&callback=initMap";
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 14,
+        center: { lat: 38.9072, lng: -77.0369 }
+      });
+
+      directionsService = new google.maps.DirectionsService();
+      directionsRenderer = new google.maps.DirectionsRenderer();
+      directionsRenderer.setMap(map);
+    }
+
     async function getCoords() {
       return new Promise((resolve) => {
         if (!navigator.geolocation) {
-          resolve("");
+          resolve(null);
           return;
         }
 
         navigator.geolocation.getCurrentPosition(
           (position) => {
-            resolve(position.coords.latitude + "," + position.coords.longitude);
+            resolve({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            });
           },
-          () => resolve(""),
+          () => resolve(null),
           {
             enableHighAccuracy: true,
             timeout: 10000,
@@ -111,12 +153,39 @@
       });
     }
 
+    function drawRoute(originCoords, nextAddress) {
+      if (!directionsService || !directionsRenderer || !originCoords || !nextAddress) {
+        return;
+      }
+
+      directionsService.route(
+        {
+          origin: { lat: originCoords.lat, lng: originCoords.lng },
+          destination: nextAddress,
+          travelMode: google.maps.TravelMode.DRIVING
+        },
+        (result, status) => {
+          const statusEl = document.getElementById("status");
+          const resultEl = document.getElementById("result");
+
+          if (status === "OK") {
+            directionsRenderer.setDirections(result);
+            statusEl.textContent = "Route loaded";
+          } else {
+            statusEl.textContent = "Sheet updated, but route failed";
+            resultEl.textContent += "\nDirections failed: " + status;
+          }
+        }
+      );
+    }
+
     async function sendToSheet(decodedText) {
       const status = document.getElementById("status");
       const result = document.getElementById("result");
 
       status.textContent = "Getting location...";
-      const coords = await getCoords();
+      const coordsObj = await getCoords();
+      const coordsText = coordsObj ? (coordsObj.lat + "," + coordsObj.lng) : "";
       const scannedTime = new Date().toISOString();
 
       status.textContent = "Sending to sheet...";
@@ -124,7 +193,7 @@
       const url =
         APPS_SCRIPT_URL +
         "?code=" + encodeURIComponent(decodedText) +
-        "&coords=" + encodeURIComponent(coords) +
+        "&coords=" + encodeURIComponent(coordsText) +
         "&time=" + encodeURIComponent(scannedTime) +
         "&_ts=" + Date.now();
 
@@ -133,11 +202,17 @@
 
       if (data.success) {
         status.textContent = "Sheet updated";
+
         result.textContent =
           "Code: " + data.code +
           "\nRow: " + data.row +
-          "\nCoords: " + (coords || "not captured") +
-          "\nTime: " + scannedTime;
+          "\nCoords: " + (coordsText || "not captured") +
+          "\nTime: " + scannedTime +
+          "\nNext Address: " + (data.nextAddress || "not returned");
+
+        if (data.nextAddress) {
+          drawRoute(coordsObj, data.nextAddress);
+        }
       } else {
         status.textContent = "Update failed";
         result.textContent =
@@ -208,6 +283,8 @@
         status.textContent = "Stop error: " + err;
       }
     }
+
+    loadGoogleMaps();
   </script>
 </body>
 </html>
